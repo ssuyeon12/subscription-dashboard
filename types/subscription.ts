@@ -35,6 +35,7 @@ export interface CompetitionRate {
   PBLANC_NO: number;           // 공고번호
   MODEL_NO: string;            // 모델번호
   HOUSE_TY: string;            // 주택형
+  HOUSE_NM?: string;           // 단지명 (enrichment: saleinfo API join)
   SUPLY_HSHLDCO: number;       // 공급세대수
   SUBSCRPT_RANK_CODE: number;  // 청약순위 (1 or 2)
   RESIDE_SECD: string;         // 거주코드 (01=해당지역, 02=기타지역, 03=기타경기)

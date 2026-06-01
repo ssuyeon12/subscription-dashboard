@@ -48,9 +48,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: `Upstream error ${res.status}` }, { status: 502 });
     }
     const json: OdcloudResponse = await res.json();
-    cacheSet(cacheKey, json, TTL.competition);
+    const items = json.data ?? [];
+
+    // 단지명 enrichment: saleinfo API에서 HOUSE_MANAGE_NO → HOUSE_NM 매핑
+    const enriched = await enrichWithHouseNames(items as Record<string, unknown>[], apiKey);
+
+    const enrichedJson = { ...json, data: enriched };
+    cacheSet(cacheKey, enrichedJson, TTL.competition);
     return NextResponse.json({
-      items: json.data ?? [],
+      items: enriched,
       matchCount: json.matchCount ?? 0,
       totalCount: json.totalCount ?? 0,
       cached: false,
@@ -59,5 +65,46 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     console.error("competition API error:", err);
     return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });
+  }
+}
+
+/**
+ * 분양정보 API(getAPTLttotPblancDetail)에서 최근 단지명을 가져와
+ * competition items에 HOUSE_NM 필드를 추가한다.
+ * 실패해도 원본 items를 그대로 반환 (graceful degradation).
+ */
+async function enrichWithHouseNames(
+  items: Record<string, unknown>[],
+  apiKey: string
+): Promise<Record<string, unknown>[]> {
+  if (!items.length) return items;
+
+  try {
+    const SALEINFO_URL =
+      "https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail";
+    // 최근 2년 범위 + 충분한 rows로 단지명 목록 조회
+    const sp = new URLSearchParams({ page: "1", perPage: "200", serviceKey: apiKey });
+    const saleRes = await fetch(`${SALEINFO_URL}?${sp}`);
+    if (!saleRes.ok) return items;
+
+    const saleJson: OdcloudResponse = await saleRes.json();
+    const saleData = (saleJson.data ?? []) as Record<string, unknown>[];
+
+    // HOUSE_MANAGE_NO → HOUSE_NM 맵 구성
+    const nameMap = new Map<string, string>();
+    for (const row of saleData) {
+      const no = String(row.HOUSE_MANAGE_NO ?? "");
+      const nm = String(row.HOUSE_NM ?? "");
+      if (no && nm) nameMap.set(no, nm);
+    }
+
+    // enrichment: HOUSE_NM 없으면 원래 값 유지
+    return items.map((item) => {
+      const no = String(item.HOUSE_MANAGE_NO ?? "");
+      const foundName = nameMap.get(no);
+      return foundName ? { ...item, HOUSE_NM: foundName } : item;
+    });
+  } catch {
+    return items; // 실패 시 원본 반환
   }
 }

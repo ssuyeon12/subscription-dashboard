@@ -26,7 +26,10 @@ export default function CompetitionChart({ items, isLoading }: Props) {
   const aggregated = rank1
     .map((item) => ({
       key: `${item.HOUSE_MANAGE_NO}-${item.HOUSE_TY}`,
-      name: `${String(item.HOUSE_MANAGE_NO).slice(-4)}(${item.HOUSE_TY ?? "-"})`,
+      name: item.HOUSE_NM
+        ? `${item.HOUSE_NM}(${item.HOUSE_TY ?? "-"})`
+        : `No.${String(item.HOUSE_MANAGE_NO).slice(-4)}(${item.HOUSE_TY ?? "-"})`,
+      fullName: item.HOUSE_NM ?? `주택관리번호: ${item.HOUSE_MANAGE_NO}`,
       rate: parseFloat(item.CMPET_RATE) || 0,
     }))
     .sort((a, b) => b.rate - a.rate)
@@ -49,7 +52,10 @@ export default function CompetitionChart({ items, isLoading }: Props) {
         <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${v}:1`} />
         <Tooltip
           formatter={(v) => [`${Number(v).toLocaleString()}:1`, "경쟁률"]}
-          labelFormatter={(label) => `주택관리번호(주택형): ${label}`}
+          labelFormatter={(label) => {
+            const item = aggregated.find((a) => a.name === label);
+            return item ? `${item.fullName} / ${label.match(/\(([^)]+)\)/)?.[1] ?? ""}` : label;
+          }}
         />
         <Bar dataKey="rate" name="경쟁률" radius={[4, 4, 0, 0]}>
           {aggregated.map((_, i) => (

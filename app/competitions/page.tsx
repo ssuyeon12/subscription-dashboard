@@ -61,7 +61,9 @@ function CompetitionsPage() {
     .map((item) => ({
       ...item,
       rateNum: parseFloat(item.CMPET_RATE) || 0,
-      label: `${String(item.HOUSE_MANAGE_NO).slice(-4)}(${item.HOUSE_TY ?? "-"})`,
+      label: item.HOUSE_NM
+        ? `${item.HOUSE_NM}(${item.HOUSE_TY ?? "-"})`
+        : `No.${String(item.HOUSE_MANAGE_NO).slice(-4)}(${item.HOUSE_TY ?? "-"})`,
     }))
     .filter((item) => item.rateNum > 0)
     .sort((a, b) => b.rateNum - a.rateNum)
@@ -227,7 +229,7 @@ function CompetitionsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-gray-500 text-left">
-                  <th className="pb-3 font-medium">주택관리번호</th>
+                  <th className="pb-3 font-medium">단지명</th>
                   <th className="pb-3 font-medium">주택형</th>
                   <th className="pb-3 font-medium text-right pr-4">공급세대</th>
                   <th className="pb-3 font-medium">청약순위</th>
@@ -242,7 +244,11 @@ function CompetitionsPage() {
                   .map((item, i) => (
                     <tr key={`${item.HOUSE_MANAGE_NO}-${item.HOUSE_TY}-${item.RESIDE_SECD}-${i}`}
                       className="hover:bg-gray-50 transition-colors">
-                      <td className="py-2.5 text-gray-600 font-mono text-xs">{item.HOUSE_MANAGE_NO}</td>
+                      <td className="py-2.5 text-gray-900 font-medium">
+                        {item.HOUSE_NM
+                          ? item.HOUSE_NM
+                          : <span className="font-mono text-xs text-gray-400">{item.HOUSE_MANAGE_NO}</span>}
+                      </td>
                       <td className="py-2.5 text-gray-900 font-medium">{item.HOUSE_TY}</td>
                       <td className="py-2.5 text-gray-600 text-right pr-4">{Number(item.SUPLY_HSHLDCO).toLocaleString()}</td>
                       <td className="py-2.5 text-gray-600">{item.SUBSCRPT_RANK_CODE}순위</td>

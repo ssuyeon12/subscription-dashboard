@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import { useState } from "react";
+import { useQueryState, parseAsString } from "nuqs";
 import { useQuery } from "@tanstack/react-query";
 import FilterBar from "@/components/FilterBar";
 import SaleInfoTable from "@/components/SaleInfoTable";
@@ -13,10 +13,9 @@ import { fetchSaleInfo, fetchCompetition, fetchSubscription } from "@/lib/api";
 import { getDefaultMonthRange, yyyymmToDate } from "@/lib/constants";
 import { SaleInfo, CompetitionRate, AreaStat, AgeStat } from "@/types/subscription";
 
-// Next.js 16: useSearchParams 등 클라이언트 훅은 Suspense 내부에서만 사용 가능
 export default function Page() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-screen text-gray-400">불러오는 중…</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center h-64 text-gray-400">불러오는 중…</div>}>
       <Dashboard />
     </Suspense>
   );
@@ -33,32 +32,32 @@ interface ApiResult {
 const defaults = getDefaultMonthRange();
 
 function Dashboard() {
-  const [filters, setFilters] = useState({
-    sggCd: "",
-    startMonth: defaults.startMonth,
-    endMonth: defaults.endMonth,
-  });
+  const [sggCd, setSggCd] = useQueryState("sggCd", parseAsString.withDefault(""));
+  const [startMonth, setStartMonth] = useQueryState("start", parseAsString.withDefault(defaults.startMonth));
+  const [endMonth, setEndMonth] = useQueryState("end", parseAsString.withDefault(defaults.endMonth));
 
   function handleFilter(key: string, value: string) {
-    const v =
-      key === "startMonth" || key === "endMonth"
-        ? value.replace("-", "")
-        : value;
-    setFilters((prev) => ({ ...prev, [key]: v }));
+    const v = key === "startMonth" || key === "endMonth" ? value.replace("-", "") : value;
+    if (key === "sggCd") setSggCd(v || null);
+    else if (key === "startMonth") setStartMonth(v);
+    else if (key === "endMonth") setEndMonth(v);
   }
+
+  const toInputMonth = (ym: string) =>
+    ym.length >= 6 ? `${ym.slice(0, 4)}-${ym.slice(4, 6)}` : "";
 
   const saleParams = {
     numOfRows: 30,
-    sggCd: filters.sggCd,
-    startDate: yyyymmToDate(filters.startMonth, false),
-    endDate: yyyymmToDate(filters.endMonth, true),
+    sggCd,
+    startDate: yyyymmToDate(startMonth, false),
+    endDate: yyyymmToDate(endMonth, true),
   };
 
   const statParams = {
     numOfRows: 50,
-    sggCd: filters.sggCd,
-    startMonth: filters.startMonth,
-    endMonth: filters.endMonth,
+    sggCd,
+    startMonth,
+    endMonth,
   };
 
   const saleQuery = useQuery<ApiResult & { items: SaleInfo[] }>({
@@ -82,27 +81,15 @@ function Dashboard() {
     queryFn: () => fetchSubscription({ ...statParams, type: "applicant-age" }),
   });
 
-  const toInputMonth = (ym: string) =>
-    ym.length >= 6 ? `${ym.slice(0, 4)}-${ym.slice(4, 6)}` : "";
-
-  // matchCount = 필터 결과 수 (totalCount는 전체 dataset 크기라 사용 X)
   const saleCount = saleQuery.data?.matchCount ?? saleQuery.data?.items?.length ?? 0;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
-      {/* 헤더 */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">청약 대시보드</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          한국부동산원 청약홈 공공 API 기반 · 분양정보 / 경쟁률 / 신청·당첨 통계
-        </p>
-      </div>
-
+    <div className="space-y-6">
       {/* 필터 */}
       <FilterBar
-        sggCd={filters.sggCd}
-        startMonth={toInputMonth(filters.startMonth)}
-        endMonth={toInputMonth(filters.endMonth)}
+        sggCd={sggCd}
+        startMonth={toInputMonth(startMonth)}
+        endMonth={toInputMonth(endMonth)}
         onChange={handleFilter}
       />
 
@@ -166,7 +153,6 @@ function Dashboard() {
               cached={saleQuery.data?.cached}
               ttlRemaining={saleQuery.data?.ttlRemaining}
             />
-            {/* matchCount 사용 — 필터 적용 결과 수 */}
             <span className="text-xs text-gray-400">총 {saleCount.toLocaleString()}건</span>
           </div>
         </div>

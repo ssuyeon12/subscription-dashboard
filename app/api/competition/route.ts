@@ -98,7 +98,8 @@ export async function GET(req: NextRequest) {
 
 /**
  * 분양정보 API에서 HOUSE_MANAGE_NO → { name, areaCode } 맵 반환
- * sggCd가 있으면 해당 지역만, 없으면 최근 200건 전체
+ * - 지역 필터 없이 전체 최근 데이터를 충분히 가져온 뒤 메모리에서 매핑
+ * - perPage=500 × 최대 2페이지(1000건)로 커버리지 확보
  */
 async function fetchSaleInfoMap(
   apiKey: string,
@@ -106,18 +107,27 @@ async function fetchSaleInfoMap(
 ): Promise<Map<string, { name: string; areaCode: string }>> {
   const map = new Map<string, { name: string; areaCode: string }>();
   try {
-    const sp = new URLSearchParams({ page: "1", perPage: "200", serviceKey: apiKey });
-    if (sggCd) appendCond(sp, "SUBSCRPT_AREA_CODE", "EQ", sggCd);
+    // 전국 데이터를 넉넉히 가져와야 competition의 HOUSE_MANAGE_NO를 커버할 수 있음
+    // (지역 필터를 saleinfo에 적용하면 매칭 누락 가능성 있음)
+    const PER = "500";
+    const pages = sggCd ? [1, 2] : [1]; // 지역 필터 시 2페이지까지
 
-    const saleRes = await fetch(`${SALEINFO_URL}?${sp}`);
-    if (!saleRes.ok) return map;
+    for (const pg of pages) {
+      const sp = new URLSearchParams({ page: String(pg), perPage: PER, serviceKey: apiKey });
+      // 지역 필터 없이 전체 조회 후 메모리에서 필터링
+      const saleRes = await fetch(`${SALEINFO_URL}?${sp}`);
+      if (!saleRes.ok) break;
 
-    const saleJson: OdcloudResponse = await saleRes.json();
-    for (const row of (saleJson.data ?? []) as Record<string, unknown>[]) {
-      const no = String(row.HOUSE_MANAGE_NO ?? "");
-      const nm = String(row.HOUSE_NM ?? "");
-      const area = String(row.SUBSCRPT_AREA_CODE ?? "");
-      if (no) map.set(no, { name: nm, areaCode: area });
+      const saleJson: OdcloudResponse = await saleRes.json();
+      const rows = (saleJson.data ?? []) as Record<string, unknown>[];
+      for (const row of rows) {
+        const no = String(row.HOUSE_MANAGE_NO ?? "");
+        const nm = String(row.HOUSE_NM ?? "");
+        const area = String(row.SUBSCRPT_AREA_CODE ?? "");
+        if (no) map.set(no, { name: nm, areaCode: area });
+      }
+      // 마지막 페이지면 중단
+      if (rows.length < Number(PER)) break;
     }
   } catch {
     // graceful degradation

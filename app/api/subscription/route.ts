@@ -55,10 +55,13 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // age/score 타입은 전국 집계 → SUBSCRPT_AREA_CODE 컬럼 없음, 지역 필터 적용 불가
+  const hasRegionField = ["applicant-area", "winner-area", "compet-area"].includes(type);
+
   const params = new URLSearchParams({ page, perPage, serviceKey: apiKey });
   if (startMonth) appendCond(params, "STAT_DE", "GTE", startMonth);
   if (endMonth) appendCond(params, "STAT_DE", "LTE", endMonth);
-  if (subscrptAreaCode) appendCond(params, "SUBSCRPT_AREA_CODE", "EQ", subscrptAreaCode);
+  if (subscrptAreaCode && hasRegionField) appendCond(params, "SUBSCRPT_AREA_CODE", "EQ", subscrptAreaCode);
 
   try {
     const res = await fetch(`${BASE}/${endpoint}?${params}`);

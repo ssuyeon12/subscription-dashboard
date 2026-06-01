@@ -5,6 +5,7 @@ import { useQueryState, parseAsString } from "nuqs";
 import { useQuery } from "@tanstack/react-query";
 import DataFreshness from "@/components/DataFreshness";
 import { fetchCompetition } from "@/lib/api";
+import { SGG_CODES } from "@/lib/constants";
 import { CompetitionRate } from "@/types/subscription";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -40,10 +41,11 @@ interface ApiResult {
 function CompetitionsPage() {
   const [rankFilter, setRankFilter] = useQueryState("rank", parseAsString.withDefault("1"));
   const [resideFilter, setResideFilter] = useQueryState("reside", parseAsString.withDefault("01"));
+  const [sggCd, setSggCd] = useQueryState("sggCd", parseAsString.withDefault(""));
 
   const { data, isLoading } = useQuery<ApiResult>({
-    queryKey: ["competition"],
-    queryFn: () => fetchCompetition({ numOfRows: 100 }),
+    queryKey: ["competition", sggCd],
+    queryFn: () => fetchCompetition({ numOfRows: 100, sggCd }),
     staleTime: 1000 * 60 * 5,
   });
 
@@ -93,6 +95,20 @@ function CompetitionsPage() {
 
       {/* 필터 */}
       <div className="flex flex-wrap gap-4 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+        {/* 지역 선택 */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-600">지역</label>
+          <select
+            value={sggCd}
+            onChange={(e) => setSggCd(e.target.value || null)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">전국</option>
+            {SGG_CODES.map((s) => (
+              <option key={s.code} value={s.code}>{s.name}</option>
+            ))}
+          </select>
+        </div>
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium text-gray-600">순위</label>
           <div className="flex gap-1">

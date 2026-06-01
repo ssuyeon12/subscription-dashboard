@@ -2,6 +2,10 @@
  * 청약접수 경쟁률 조회 프록시
  * API: ApplyhomeInfoCmpetRtSvc/v1/getAPTLttotPblancCmpet
  * 캐시 TTL: 5분
+ *
+ * 경쟁률 API에는 지역 필드(SUBSCRPT_AREA_CODE)가 없음.
+ * sggCd 필터가 있을 때는 분양정보 API에서 해당 지역의 HOUSE_MANAGE_NO 목록을 구해
+ * 경쟁률 결과를 필터링한다.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { appendCond, OdcloudResponse } from "@/lib/xml-parser";
@@ -11,26 +15,29 @@ export const dynamic = "force-dynamic";
 
 const BASE_URL =
   "https://api.odcloud.kr/api/ApplyhomeInfoCmpetRtSvc/v1/getAPTLttotPblancCmpet";
+const SALEINFO_URL =
+  "https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const page = searchParams.get("pageNo") ?? "1";
-  const perPage = searchParams.get("numOfRows") ?? "30";
+  const perPage = searchParams.get("numOfRows") ?? "100";
   const houseManageNo = searchParams.get("houseManageNo") ?? "";
   const resideSecd = searchParams.get("resideSecd") ?? "";
+  const sggCd = searchParams.get("sggCd") ?? ""; // 지역 필터 (SUBSCRPT_AREA_CODE)
 
   const apiKey = process.env.PUBLIC_DATA_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "API key not configured" }, { status: 500 });
   }
 
-  const cacheKey = `competition:${page}:${perPage}:${houseManageNo}:${resideSecd}`;
-  const cached = cacheGet<OdcloudResponse>(cacheKey);
+  const cacheKey = `competition:${page}:${perPage}:${houseManageNo}:${resideSecd}:${sggCd}`;
+  const cached = cacheGet<{ enriched: Record<string, unknown>[]; matchCount: number; totalCount: number }>(cacheKey);
   if (cached) {
     return NextResponse.json({
-      items: cached.data.data ?? [],
-      matchCount: cached.data.matchCount ?? 0,
-      totalCount: cached.data.totalCount ?? 0,
+      items: cached.data.enriched,
+      matchCount: cached.data.matchCount,
+      totalCount: cached.data.totalCount,
       cached: true,
       ttlRemaining: cached.ttlRemaining,
     });
@@ -41,6 +48,7 @@ export async function GET(req: NextRequest) {
   if (resideSecd) appendCond(params, "RESIDE_SECD", "EQ", resideSecd);
 
   try {
+    // 1) 경쟁률 전체 조회 (지역 필드 없으므로 필터 없이 가져옴)
     const res = await fetch(`${BASE_URL}?${params}`);
     if (!res.ok) {
       const text = await res.text();
@@ -48,16 +56,36 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: `Upstream error ${res.status}` }, { status: 502 });
     }
     const json: OdcloudResponse = await res.json();
-    const items = json.data ?? [];
+    let items = (json.data ?? []) as Record<string, unknown>[];
 
-    // 단지명 enrichment: saleinfo API에서 HOUSE_MANAGE_NO → HOUSE_NM 매핑
-    const enriched = await enrichWithHouseNames(items as Record<string, unknown>[], apiKey);
+    // 2) saleinfo에서 단지명 + 지역코드 enrichment
+    const saleMap = await fetchSaleInfoMap(apiKey, sggCd);
 
-    const enrichedJson = { ...json, data: enriched };
-    cacheSet(cacheKey, enrichedJson, TTL.competition);
+    // 3) 단지명 붙이기
+    items = items.map((item) => {
+      const no = String(item.HOUSE_MANAGE_NO ?? "");
+      const sale = saleMap.get(no);
+      return sale ? { ...item, HOUSE_NM: sale.name, SUBSCRPT_AREA_CODE: sale.areaCode } : item;
+    });
+
+    // 4) sggCd가 있으면 해당 지역 단지만 필터
+    if (sggCd) {
+      const regionNos = new Set([...saleMap.entries()]
+        .filter(([, v]) => v.areaCode === sggCd)
+        .map(([k]) => k));
+      items = items.filter((item) => regionNos.has(String(item.HOUSE_MANAGE_NO ?? "")));
+    }
+
+    const payload = {
+      enriched: items,
+      matchCount: items.length,
+      totalCount: json.totalCount ?? 0,
+    };
+    cacheSet(cacheKey, payload, TTL.competition);
+
     return NextResponse.json({
-      items: enriched,
-      matchCount: json.matchCount ?? 0,
+      items,
+      matchCount: items.length,
       totalCount: json.totalCount ?? 0,
       cached: false,
       ttlRemaining: TTL.competition,
@@ -69,42 +97,30 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * 분양정보 API(getAPTLttotPblancDetail)에서 최근 단지명을 가져와
- * competition items에 HOUSE_NM 필드를 추가한다.
- * 실패해도 원본 items를 그대로 반환 (graceful degradation).
+ * 분양정보 API에서 HOUSE_MANAGE_NO → { name, areaCode } 맵 반환
+ * sggCd가 있으면 해당 지역만, 없으면 최근 200건 전체
  */
-async function enrichWithHouseNames(
-  items: Record<string, unknown>[],
-  apiKey: string
-): Promise<Record<string, unknown>[]> {
-  if (!items.length) return items;
-
+async function fetchSaleInfoMap(
+  apiKey: string,
+  sggCd: string
+): Promise<Map<string, { name: string; areaCode: string }>> {
+  const map = new Map<string, { name: string; areaCode: string }>();
   try {
-    const SALEINFO_URL =
-      "https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail";
-    // 최근 2년 범위 + 충분한 rows로 단지명 목록 조회
     const sp = new URLSearchParams({ page: "1", perPage: "200", serviceKey: apiKey });
+    if (sggCd) appendCond(sp, "SUBSCRPT_AREA_CODE", "EQ", sggCd);
+
     const saleRes = await fetch(`${SALEINFO_URL}?${sp}`);
-    if (!saleRes.ok) return items;
+    if (!saleRes.ok) return map;
 
     const saleJson: OdcloudResponse = await saleRes.json();
-    const saleData = (saleJson.data ?? []) as Record<string, unknown>[];
-
-    // HOUSE_MANAGE_NO → HOUSE_NM 맵 구성
-    const nameMap = new Map<string, string>();
-    for (const row of saleData) {
+    for (const row of (saleJson.data ?? []) as Record<string, unknown>[]) {
       const no = String(row.HOUSE_MANAGE_NO ?? "");
       const nm = String(row.HOUSE_NM ?? "");
-      if (no && nm) nameMap.set(no, nm);
+      const area = String(row.SUBSCRPT_AREA_CODE ?? "");
+      if (no) map.set(no, { name: nm, areaCode: area });
     }
-
-    // enrichment: HOUSE_NM 없으면 원래 값 유지
-    return items.map((item) => {
-      const no = String(item.HOUSE_MANAGE_NO ?? "");
-      const foundName = nameMap.get(no);
-      return foundName ? { ...item, HOUSE_NM: foundName } : item;
-    });
   } catch {
-    return items; // 실패 시 원본 반환
+    // graceful degradation
   }
+  return map;
 }

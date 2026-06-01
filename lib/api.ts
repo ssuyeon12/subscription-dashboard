@@ -32,6 +32,7 @@ export function fetchCompetition(params: CommonParams & { houseManageNo?: string
   return apiFetch("competition", {
     pageNo: params.pageNo,
     numOfRows: params.numOfRows,
+    sggCd: params.sggCd,
     houseManageNo: params.houseManageNo,
     resideSecd: params.resideSecd,
   });

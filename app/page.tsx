@@ -66,8 +66,8 @@ function Dashboard() {
   });
 
   const compQuery = useQuery<ApiResult & { items: CompetitionRate[] }>({
-    queryKey: ["competition"],
-    queryFn: () => fetchCompetition({ numOfRows: 50 }),
+    queryKey: ["competition", sggCd],
+    queryFn: () => fetchCompetition({ numOfRows: 100, sggCd }),
     staleTime: 1000 * 60 * 5,
   });
 

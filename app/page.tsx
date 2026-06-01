@@ -65,9 +65,10 @@ function Dashboard() {
     queryFn: () => fetchSaleInfo(saleParams),
   });
 
+  // 경쟁률 API는 지역 필드 없음 → 전국 Top10 고정
   const compQuery = useQuery<ApiResult & { items: CompetitionRate[] }>({
-    queryKey: ["competition", sggCd],
-    queryFn: () => fetchCompetition({ numOfRows: 100, sggCd }),
+    queryKey: ["competition"],
+    queryFn: () => fetchCompetition({ numOfRows: 100 }),
     staleTime: 1000 * 60 * 5,
   });
 
@@ -118,7 +119,7 @@ function Dashboard() {
               ttlRemaining={compQuery.data?.ttlRemaining}
             />
           </div>
-          <p className="text-xs text-gray-400 mb-4">1순위 해당지역 기준 · 최근 접수 완료 단지</p>
+          <p className="text-xs text-gray-400 mb-4">1순위 해당지역 기준 · 최근 접수 완료 단지 · 전국</p>
           <CompetitionChart
             items={compQuery.data?.items ?? []}
             isLoading={compQuery.isLoading}

@@ -99,9 +99,10 @@ function Dashboard() {
     queryFn: () => fetchSaleInfo(saleParams),
   });
 
+  // sggCd를 queryKey에 포함 → 지역 변경 시 재조회
   const compQuery = useQuery<ApiResult<CompetitionRate>>({
-    queryKey: ["competition"],
-    queryFn: () => fetchCompetition({ numOfRows: 100 }),
+    queryKey: ["competition", sggCd],
+    queryFn: () => fetchCompetition({ numOfRows: 100, sggCd }),
     staleTime: 1000 * 60 * 5,
   });
 

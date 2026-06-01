@@ -1,14 +1,8 @@
 "use client";
 
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Cell,
 } from "recharts";
 import { CompetitionRate } from "@/types/subscription";
 
@@ -24,29 +18,40 @@ export default function CompetitionChart({ items, isLoading }: Props) {
     return <div className="flex items-center justify-center h-48 text-gray-400">데이터 불러오는 중...</div>;
   }
 
-  // 단지별 최대 1순위 경쟁률 집계 (상위 10개)
-  const aggregated = items
-    .filter((item) => item.gnrlRnk1CrsplAplyPcnt > 0)
-    .sort((a, b) => b.gnrlRnk1CrsplAplyPcnt - a.gnrlRnk1CrsplAplyPcnt)
-    .slice(0, 10)
+  // 1순위 해당지역(RESIDE_SECD=01) 경쟁률 상위 10개
+  const rank1 = items.filter(
+    (item) => item.SUBSCRPT_RANK_CODE === 1 && item.RESIDE_SECD === "01" && item.CMPET_RATE !== "-"
+  );
+
+  const aggregated = rank1
     .map((item) => ({
-      name: item.houseName?.length > 10 ? item.houseName.slice(0, 10) + "…" : item.houseName,
-      "1순위 경쟁률": item.gnrlRnk1CrsplAplyPcnt,
-      "2순위 경쟁률": item.gnrlRnk2CrsplAplyPcnt ?? 0,
-    }));
+      key: `${item.HOUSE_MANAGE_NO}-${item.HOUSE_TY}`,
+      name: `${String(item.HOUSE_MANAGE_NO).slice(-4)}(${item.HOUSE_TY ?? "-"})`,
+      rate: parseFloat(item.CMPET_RATE) || 0,
+    }))
+    .sort((a, b) => b.rate - a.rate)
+    .slice(0, 10);
 
   if (!aggregated.length) {
-    return <div className="flex items-center justify-center h-48 text-gray-400">경쟁률 데이터가 없습니다.</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-48 text-gray-400 text-sm text-center px-4 gap-1">
+        <span>경쟁률 데이터가 없습니다.</span>
+        <span className="text-xs text-gray-300">최근 접수 완료된 단지의 경쟁률이 표시됩니다.</span>
+      </div>
+    );
   }
 
   return (
     <ResponsiveContainer width="100%" height={320}>
       <BarChart data={aggregated} margin={{ top: 5, right: 20, left: 0, bottom: 60 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-        <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-35} textAnchor="end" interval={0} />
+        <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
         <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${v}:1`} />
-        <Tooltip formatter={(v) => `${Number(v).toLocaleString()}:1`} />
-        <Bar dataKey="1순위 경쟁률" radius={[4, 4, 0, 0]}>
+        <Tooltip
+          formatter={(v) => [`${Number(v).toLocaleString()}:1`, "경쟁률"]}
+          labelFormatter={(label) => `주택관리번호(주택형): ${label}`}
+        />
+        <Bar dataKey="rate" name="경쟁률" radius={[4, 4, 0, 0]}>
           {aggregated.map((_, i) => (
             <Cell key={i} fill={COLORS[i % COLORS.length]} />
           ))}

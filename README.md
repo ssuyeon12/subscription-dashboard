@@ -14,13 +14,15 @@
 
 ### 1. API 키 설정
 
-```bash
-cp .env.example .env.local
+프로젝트 루트에 `.env` 파일을 생성하고 아래 내용을 입력하세요:
+
+```
+PUBLIC_DATA_API_KEY=여기에_디코딩키_붙여넣기
 ```
 
-`.env.local`을 열어 `PUBLIC_DATA_API_KEY`에 공공데이터포털 인코딩 키를 입력하세요.
-
-> **API 키 발급 경로**: [data.go.kr](https://data.go.kr) → 로그인 → 마이페이지 → 활용신청 목록 → 인코딩 키 복사
+> **발급 경로**: [data.go.kr](https://data.go.kr) → 로그인 → 마이페이지 → 활용신청 목록
+>
+> **⚠️ 디코딩 키를 사용하세요.** 코드 내부에서 `URLSearchParams`가 키를 자동 인코딩하므로, 이미 인코딩된 키를 넣으면 이중 인코딩으로 인증 오류가 발생합니다.
 
 ### 2. 의존성 설치 및 실행
 
@@ -33,11 +35,11 @@ npm run dev
 
 ## Vercel 배포
 
-1. GitHub에 저장소를 push (`.env.local`은 자동으로 제외됨)
+1. GitHub에 저장소를 push (`.env`는 자동으로 제외됨)
 2. [vercel.com](https://vercel.com) → **Add New Project** → 저장소 선택
 3. **Environment Variables** 탭에서 추가
    - Key: `PUBLIC_DATA_API_KEY`
-   - Value: 공공데이터포털 인코딩 키
+   - Value: 공공데이터포털 **디코딩 키**
 4. **Deploy** 클릭
 
 ## 기술 스택
@@ -51,5 +53,5 @@ npm run dev
 ## 주의사항
 
 - API 엔드포인트는 실제 활용승인 후 data.go.kr에서 확인한 정확한 URL로 교체 필요
-- `.env.local` 파일은 절대 GitHub에 커밋하지 마세요
+- `.env` 파일은 절대 GitHub에 커밋하지 마세요 (`.gitignore`에 등록됨)
 - 공공 API는 하루 트래픽 제한이 있으므로 서버사이드 캐시(1시간) 적용됨

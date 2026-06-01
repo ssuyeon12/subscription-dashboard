@@ -1,62 +1,63 @@
 "use client";
 
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { SpecialSupply } from "@/types/subscription";
+/**
+ * 연령별 청약 신청자 현황 차트
+ * 데이터 출처: ApplyhomeStatSvc → getAPTReqstAgeStat (연령별 신청자)
+ * 응답 필드: STAT_DE, AGE_30, AGE_40, AGE_50, AGE_60
+ */
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  Legend, ResponsiveContainer,
+} from "recharts";
+import { AgeStat } from "@/types/subscription";
 
 interface Props {
-  items: SpecialSupply[];
+  items: AgeStat[];
   isLoading: boolean;
 }
 
-const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6"];
+const AGE_COLORS = {
+  "30대 이하": "#3b82f6",
+  "40대": "#10b981",
+  "50대": "#f59e0b",
+  "60대 이상": "#ef4444",
+};
 
-export default function SpecialSupplyChart({ items, isLoading }: Props) {
+export default function AgeDistributionChart({ items, isLoading }: Props) {
   if (isLoading) {
     return <div className="flex items-center justify-center h-48 text-gray-400">데이터 불러오는 중...</div>;
   }
 
-  const totals = items.reduce(
-    (acc, item) => {
-      acc["다자녀가구"] = (acc["다자녀가구"] ?? 0) + (item.mlfamRcpCnt ?? 0);
-      acc["노부모부양"] = (acc["노부모부양"] ?? 0) + (item.oldParntsSuportRcpCnt ?? 0);
-      acc["신혼부부"] = (acc["신혼부부"] ?? 0) + (item.newlyMarriedRcpCnt ?? 0);
-      acc["생애최초"] = (acc["생애최초"] ?? 0) + (item.firstLiveRcpCnt ?? 0);
-      acc["기관추천"] = (acc["기관추천"] ?? 0) + (item.insttRecomendRcpCnt ?? 0);
-      acc["기타"] = (acc["기타"] ?? 0) + (item.etcRcpCnt ?? 0);
-      return acc;
-    },
-    {} as Record<string, number>
-  );
-
-  const data = Object.entries(totals)
-    .filter(([, v]) => v > 0)
-    .map(([name, value]) => ({ name, value }));
-
-  if (!data.length) {
-    return <div className="flex items-center justify-center h-48 text-gray-400">특별공급 데이터가 없습니다.</div>;
+  if (!items.length) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 text-gray-400 text-sm text-center gap-1">
+        <span>연령별 신청 데이터가 없습니다.</span>
+        <span className="text-xs text-gray-300">매월 26일에 전월 데이터가 업데이트됩니다.</span>
+      </div>
+    );
   }
+
+  // 월별 집계
+  const chartData = items.map((item) => ({
+    월: `${item.STAT_DE.slice(0, 4)}.${item.STAT_DE.slice(4, 6)}`,
+    "30대 이하": item.AGE_30 ?? 0,
+    "40대": item.AGE_40 ?? 0,
+    "50대": item.AGE_50 ?? 0,
+    "60대 이상": item.AGE_60 ?? 0,
+  }));
 
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <PieChart>
-        <Pie
-          data={data}
-          cx="50%"
-          cy="50%"
-          innerRadius={60}
-          outerRadius={100}
-          paddingAngle={3}
-          dataKey="value"
-          label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-          labelLine={false}
-        >
-          {data.map((_, i) => (
-            <Cell key={i} fill={COLORS[i % COLORS.length]} />
-          ))}
-        </Pie>
+      <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+        <XAxis dataKey="월" tick={{ fontSize: 12 }} />
+        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
         <Tooltip formatter={(v) => `${Number(v).toLocaleString()}건`} />
         <Legend />
-      </PieChart>
+        {(Object.keys(AGE_COLORS) as (keyof typeof AGE_COLORS)[]).map((key) => (
+          <Bar key={key} dataKey={key} stackId="a" fill={AGE_COLORS[key]} />
+        ))}
+      </BarChart>
     </ResponsiveContainer>
   );
 }

@@ -3,12 +3,19 @@
 import { SaleInfo } from "@/types/subscription";
 
 function formatDate(d: string) {
-  if (!d || d.length < 8) return d ?? "-";
-  return `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}`;
+  if (!d) return "-";
+  // YYYY-MM-DD 형식 그대로 사용
+  return d.length === 10 ? d : "-";
+}
+
+function formatMvnYm(ym: string) {
+  if (!ym || ym.length < 6) return "-";
+  return `${ym.slice(0, 4)}.${ym.slice(4, 6)}`;
 }
 
 function statusBadge(start: string, end: string) {
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const today = new Date().toISOString().slice(0, 10);
+  if (!start || !end) return null;
   if (today < start) return <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">예정</span>;
   if (today <= end) return <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">접수중</span>;
   return <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">마감</span>;
@@ -21,19 +28,10 @@ interface Props {
 
 export default function SaleInfoTable({ items, isLoading }: Props) {
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-48 text-gray-400">
-        데이터 불러오는 중...
-      </div>
-    );
+    return <div className="flex items-center justify-center h-48 text-gray-400">데이터 불러오는 중...</div>;
   }
-
   if (!items.length) {
-    return (
-      <div className="flex items-center justify-center h-48 text-gray-400">
-        해당 조건의 분양정보가 없습니다.
-      </div>
-    );
+    return <div className="flex items-center justify-center h-48 text-gray-400">해당 조건의 분양정보가 없습니다.</div>;
   }
 
   return (
@@ -52,16 +50,27 @@ export default function SaleInfoTable({ items, isLoading }: Props) {
         </thead>
         <tbody className="divide-y divide-gray-50">
           {items.map((item, i) => (
-            <tr key={item.houseManageNo ?? i} className="hover:bg-gray-50 transition-colors">
-              <td className="py-3 font-medium text-gray-900">{item.houseName}</td>
-              <td className="py-3 text-gray-600">{item.sggNm}</td>
-              <td className="py-3 text-gray-600">{item.totSuplyHshldco?.toLocaleString() ?? "-"}세대</td>
-              <td className="py-3 text-gray-600">
-                {formatDate(item.rceptBgnde)} ~ {formatDate(item.rceptEndde)}
+            <tr key={item.HOUSE_MANAGE_NO ?? i} className="hover:bg-gray-50 transition-colors">
+              <td className="py-3 font-medium text-gray-900">
+                {item.PBLANC_URL ? (
+                  <a href={item.PBLANC_URL} target="_blank" rel="noopener noreferrer"
+                     className="hover:text-blue-600 hover:underline">
+                    {item.HOUSE_NM}
+                  </a>
+                ) : item.HOUSE_NM}
               </td>
-              <td className="py-3 text-gray-600">{formatDate(item.przwnerPresnatnDe)}</td>
-              <td className="py-3 text-gray-600">{item.mvnPrearnge ?? "-"}</td>
-              <td className="py-3">{statusBadge(item.rceptBgnde, item.rceptEndde)}</td>
+              <td className="py-3 text-gray-600">{item.SUBSCRPT_AREA_CODE_NM}</td>
+              <td className="py-3 text-gray-600">
+                {item.TOT_SUPLY_HSHLDCO?.toLocaleString() ?? "-"}세대
+              </td>
+              <td className="py-3 text-gray-600 whitespace-nowrap">
+                {formatDate(item.RCEPT_BGNDE)} ~ {formatDate(item.RCEPT_ENDDE)}
+              </td>
+              <td className="py-3 text-gray-600 whitespace-nowrap">
+                {formatDate(item.PRZWNER_PRESNATN_DE)}
+              </td>
+              <td className="py-3 text-gray-600">{formatMvnYm(item.MVN_PREARNGE_YM)}</td>
+              <td className="py-3">{statusBadge(item.RCEPT_BGNDE, item.RCEPT_ENDDE)}</td>
             </tr>
           ))}
         </tbody>

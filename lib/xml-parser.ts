@@ -1,37 +1,38 @@
-import { XMLParser } from "fast-xml-parser";
+/**
+ * 공공데이터포털 odcloud API JSON 응답 헬퍼
+ * 응답 형식: { data: [...], currentCount, matchCount, page, perPage, totalCount }
+ */
 
-const parser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: "@_",
-  parseAttributeValue: true,
-  parseTagValue: true,
-});
-
-export function parseXML(xml: string): Record<string, unknown> {
-  return parser.parse(xml);
+export interface OdcloudResponse<T = Record<string, unknown>> {
+  data: T[];
+  currentCount: number;
+  matchCount: number;
+  page: number;
+  perPage: number;
+  totalCount: number;
 }
 
-// 공공 API 응답에서 items 배열을 안전하게 추출
-export function extractItems(parsed: Record<string, unknown>): Record<string, unknown>[] {
-  try {
-    const response = parsed as {
-      response?: { body?: { items?: { item?: unknown } } };
-    };
-    const item = response?.response?.body?.items?.item;
-    if (!item) return [];
-    return Array.isArray(item) ? item as Record<string, unknown>[] : [item as Record<string, unknown>];
-  } catch {
-    return [];
-  }
+export function extractItems<T = Record<string, unknown>>(
+  json: OdcloudResponse<T>
+): T[] {
+  return json?.data ?? [];
 }
 
-export function extractTotalCount(parsed: Record<string, unknown>): number {
-  try {
-    const response = parsed as {
-      response?: { body?: { totalCount?: number } };
-    };
-    return response?.response?.body?.totalCount ?? 0;
-  } catch {
-    return 0;
-  }
+export function extractTotalCount<T = Record<string, unknown>>(
+  json: OdcloudResponse<T>
+): number {
+  return json?.totalCount ?? 0;
+}
+
+/**
+ * cond[] 쿼리 파라미터를 URLSearchParams에 추가하는 헬퍼
+ * odcloud API는 ?cond[FIELD::OPERATOR]=value 형식 사용
+ */
+export function appendCond(
+  params: URLSearchParams,
+  field: string,
+  operator: "EQ" | "LIKE" | "GTE" | "LTE" | "GT" | "LT",
+  value: string
+) {
+  params.append(`cond[${field}::${operator}]`, value);
 }
